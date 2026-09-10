@@ -10,6 +10,7 @@ import {
   Settings,
   Bell,
   Search,
+  BookOpen,
 } from 'lucide-react';
 
 const navItems: Array<{ id: Page; label: string; icon: typeof LayoutDashboard; description: string }> = [
@@ -18,6 +19,7 @@ const navItems: Array<{ id: Page; label: string; icon: typeof LayoutDashboard; d
   { id: 'segments', label: 'Segments', icon: Layers, description: 'Segment inspector' },
   { id: 'studio', label: 'Manticore Studio', icon: Terminal, description: 'Visual query builder' },
   { id: 'performance', label: 'Performance', icon: Activity, description: 'Metrics & monitoring' },
+  { id: 'docs', label: 'Documentation', icon: BookOpen, description: 'Guides & reference' },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {

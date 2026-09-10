@@ -5,6 +5,7 @@ import { StoragePage } from './dashboard/pages/StoragePage';
 import { SegmentsPage } from './dashboard/pages/SegmentsPage';
 import { StudioPage } from './dashboard/pages/StudioPage';
 import { PerformancePage } from './dashboard/pages/PerformancePage';
+import { DocsPage } from './dashboard/pages/DocsPage';
 
 function PageRouter() {
   const { currentPage } = useDashboardStore();
@@ -20,6 +21,8 @@ function PageRouter() {
       return <StudioPage />;
     case 'performance':
       return <PerformancePage />;
+    case 'docs':
+      return <DocsPage />;
     default:
       return <OverviewPage />;
   }

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { QueryResult } from '../data/mockData';
 
-export type Page = 'overview' | 'storage' | 'segments' | 'studio' | 'performance';
+export type Page = 'overview' | 'storage' | 'segments' | 'studio' | 'performance' | 'docs';
 
 export interface QueryState {
   match: string;
