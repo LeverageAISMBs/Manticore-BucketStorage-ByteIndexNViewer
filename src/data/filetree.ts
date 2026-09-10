@@ -109,6 +109,9 @@ export const FILE_TREE: FileNode = {
     },
     { name: "tsconfig.json", path: "tsconfig.json", kind: "file", description: "TypeScript configuration" },
     { name: "package.json", path: "package.json", kind: "file", description: "Package manifest" },
+    { name: "README.md", path: "README.md", kind: "file", description: "Project overview and quick start" },
+    { name: "AGENTS.md", path: "AGENTS.md", kind: "file", description: "Rules for AI agents working on this codebase" },
+    { name: "GUIDE.md", path: "GUIDE.md", kind: "file", description: "Detailed user guide" },
   ],
 };
 
