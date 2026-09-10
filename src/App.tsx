@@ -521,6 +521,168 @@ export function mintId<K extends EntityWithPrefix>(
 //   mintId("session")  → "ses_01JQ8Z3K7M4P2V9XR6TB5NCWDH"
 //   mintId("segment")  → "seg_01JQ8Z3K8N1Q4W7YS2UA6MDXFJ"`);
 
+// -- README.md --
+registerFile("README.md", `# Agent History
+
+> **Storage, Index & Segment Contract — Package P1**
+
+Agent History is a system for capturing, storing, indexing, and retrieving the full history of AI-agent interactions across multiple providers (Anthropic, OpenAI, Google) and harnesses (claude-code, codex-cli, gemini-cli, pi-code).
+
+## What this package (P1) defines
+
+P1 answers three questions:
+
+1. **Where do bytes live?** — Content-addressed, uncompressed, immutable objects in S3-compatible storage.
+2. **How is a 17 KB slice of a 400 MB object addressed?** — Via \`segment\` entities that bind a byte range to a knowledge entity.
+3. **What does the search projection hold?** — Two Manticore real-time tables that are fully droppable and rebuildable.
+
+## The four invariants
+
+| ID | Statement |
+|----|-----------|
+| **I-1** | Canonical identity is owned by the catalog, never by infrastructure. |
+| **I-2** | Manticore holds zero state not in the bucket. Droppable and rebuildable. |
+| **I-3** | Stored objects are immutable and content-addressed. |
+| **I-4** | Every machine holds the complete catalog. |
+
+## Quick start
+
+\\\`\\\`\\\`bash
+npm install
+npm run typecheck
+npm test
+npm run dev
+\\\`\\\`\\\`
+
+## Related packages
+
+| Package | Purpose |
+|---------|---------|
+| **P0** | Canonical history contract, capture adapters |
+| **P1** | **This** — Storage, index, and segment contract |
+| **P2** | Context assembly and ranking contract |
+`, "markdown");
+
+// -- AGENTS.md --
+registerFile("AGENTS.md", `# AGENTS.md — Rules for AI Agents
+
+> This file is read by AI coding agents before they modify any file in this repository.
+
+## Hard rules
+
+### R-1: Canonical identity is owned by the catalog
+Never use a provider's native ID as a key, join column, or API parameter.
+
+### R-2: Offsets are bigint, always
+Manticore's int is 32-bit unsigned. Every byte offset is bigint. No exceptions.
+
+### R-3: Objects are immutable and uncompressed
+Never compress a canonical object. Never overwrite an existing key.
+
+### R-4: The index is droppable
+Never store state in Manticore that does not exist in the bucket.
+
+### R-5: Three verbs, not seven
+The retrieval surface is search, expand, materialize. Do not add more.
+
+### R-6: A partial index must report a miss as a miss
+Return projection_miss — never an empty result set.
+
+### R-7: Embedding model isolation
+Any query touching body_vector must be scoped to a single embed_model.
+
+## Taxonomy
+
+### Provider vs Harness
+\\\`\\\`\\\`
+✅ provider: "anthropic"    harness: "claude-code"
+❌ provider: "claude-code"  harness: "pi-code"   ← INVERTED
+\\\`\\\`\\\`
+
+### Object vs Artifact
+- object / obj_ — a content-addressed blob in a bucket
+- artifact / art_ — a produced thing (file, screenshot, PDF)
+
+## Validation gates
+
+| Gate | What it proves |
+|------|---------------|
+| G-1 | Byte index round-trips exactly |
+| G-2 | Deterministic serialization |
+| G-3 | Offset boundary safety (UTF-8) |
+| G-4 | Index rebuildability |
+| G-7 | Model isolation |
+| G-8 | Miss reporting |
+`, "markdown");
+
+// -- GUIDE.md --
+registerFile("GUIDE.md", `# User Guide — Agent History P1
+
+> A detailed walkthrough for developers and operators.
+
+## 1. Conceptual Overview
+
+Agent History is designed around three core principles:
+
+1. **Immutability** — Once bytes are stored, they never change.
+2. **Content addressing** — Objects are identified by their hash.
+3. **Droppable index** — The search index holds zero state not in the bucket.
+
+## 2. Data Flow
+
+\\\`\\\`\\\`
+Raw capture → Normalize → Canonical JSONL → Store → Segment → Index → Retrieve
+\\\`\\\`\\\`
+
+## 3. Working with Objects
+
+### Object identity is dual
+- object_id — The catalog's branded handle (obj_…)
+- content_hash — sha256 of the exact stored bytes
+
+### Storage key convention
+\\\`\\\`\\\`
+objects/<hash[0:2]>/<hash[2:4]>/<hash>
+\\\`\\\`\\\`
+
+## 4. Working with Segments
+
+A segment binds a knowledge entity to an exact byte range.
+
+### byte_range ≠ text_range
+The byte range addresses the JSONL line. The text range addresses the stripped prose.
+
+## 5. Querying the Index
+
+### Three verbs
+| Verb | Bucket call? | Returns |
+|------|-------------|---------|
+| search | No | Hits + cost + facets |
+| expand | No | Wider text projection |
+| materialize | Yes | Raw bytes |
+
+## 6. Redaction and Purging
+
+### Lifecycle states
+| State | Bytes | Reversible |
+|-------|-------|-----------|
+| active | Present | — |
+| tombstoned | Present | Yes |
+| purged | Deleted | No |
+
+## 7. Validation Gates
+
+G-1 is the gate that matters most. It proves the byte index is real.
+
+## 8. Troubleshooting
+
+### Empty search results
+Check if the session is in the local projection (projection_miss vs empty).
+
+### Byte offset out of range
+Re-segment the object and run validation gate G-1.
+`, "markdown");
+
 // -- lib/serialization.ts --
 registerFile("src/lib/serialization.ts", `// ---------------------------------------------------------------------------
 // Deterministic serialization — §5 Canonical Object Format
@@ -781,6 +943,97 @@ function highlightTS(code: string): string {
   return html;
 }
 
+// ---- Markdown Renderer -----------------------------------------------------
+
+function renderMarkdown(md: string): string {
+  let html = md;
+
+  // Escape HTML first (but preserve code blocks)
+  const codeBlocks: string[] = [];
+  // Fenced code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
+    const idx = codeBlocks.length;
+    const escaped = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    codeBlocks.push(`<pre class="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4 my-4 overflow-x-auto text-sm"><code class="text-slate-300">${escaped}</code></pre>`);
+    return `%%CODEBLOCK_${idx}%%`;
+  });
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code class="bg-sky-500/10 text-sky-300 px-1.5 py-0.5 rounded text-sm">$1</code>');
+
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold text-white mt-6 mb-2">$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2 class="text-xl font-bold text-white mt-8 mb-3 pb-2 border-b border-slate-700/50">$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold text-white mb-4">$1</h1>');
+
+  // Bold and italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em class="text-slate-300">$1</em>');
+
+  // Blockquotes
+  html = html.replace(/^> (.+)$/gm, '<blockquote class="border-l-3 border-sky-500 pl-4 my-4 text-slate-400 italic">$1</blockquote>');
+
+  // Tables
+  html = html.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)/gm, (_match, header, _separator, body) => {
+    const headers = header.split("|").filter((c: string) => c.trim()).map((c: string) => 
+      `<th class="text-left px-3 py-2 bg-slate-800/50 text-xs font-semibold text-slate-300 uppercase tracking-wider">${c.trim()}</th>`
+    ).join("");
+    const rows = body.trim().split("\n").map((row: string) => {
+      const cells = row.split("|").filter((c: string) => c.trim()).map((c: string) => 
+        `<td class="px-3 py-2 border-b border-slate-800/50 text-sm text-slate-400">${c.trim()}</td>`
+      ).join("");
+      return `<tr>${cells}</tr>`;
+    }).join("");
+    return `<div class="overflow-x-auto my-4"><table class="w-full border-collapse"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  });
+
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li class="ml-4 text-slate-400 text-sm my-1">• $1</li>');
+
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li class="ml-4 text-slate-400 text-sm my-1">$1</li>');
+
+  // Horizontal rules
+  html = html.replace(/^---$/gm, '<hr class="border-slate-700/50 my-6" />');
+
+  // Paragraphs (lines that aren't already wrapped)
+  html = html.replace(/^(?!<[hluobpd]|%%|<hr|<div|<table|<pre)(.+)$/gm, (match) => {
+    if (match.trim() === "") return "";
+    return `<p class="text-slate-400 my-2 leading-relaxed">${match}</p>`;
+  });
+
+  // Restore code blocks
+  codeBlocks.forEach((block, idx) => {
+    html = html.replace(`%%CODEBLOCK_${idx}%%`, block);
+  });
+
+  return html;
+}
+
+function MarkdownViewer({ path, content }: { path: string; content: string }) {
+  const html = renderMarkdown(content);
+  const lines = content.split("\n");
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* File header */}
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-b border-slate-700/50">
+        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span className="text-sm text-slate-300 font-mono">{path}</span>
+        <span className="ml-auto text-xs text-slate-600">markdown</span>
+        <span className="text-xs text-slate-600">{lines.length} lines</span>
+      </div>
+
+      {/* Rendered markdown */}
+      <div className="flex-1 overflow-y-auto px-8 py-6 max-w-4xl">
+        <div dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </div>
+  );
+}
+
 // ---- Code Viewer -----------------------------------------------------------
 
 function CodeViewer({ path, content, lang }: { path: string; content: string; lang: string }) {
@@ -824,7 +1077,7 @@ function CodeViewer({ path, content, lang }: { path: string; content: string; la
 
 // ---- Overview Panel --------------------------------------------------------
 
-function OverviewPanel() {
+function OverviewPanel({ onSelectFile }: { onSelectFile: (path: string) => void }) {
   const allFiles = useMemo(() => flattenTree(FILE_TREE), []);
 
   return (
@@ -919,6 +1172,28 @@ function OverviewPanel() {
             </ul>
           </div>
         </section>
+      </div>
+
+      {/* Documentation */}
+      <div className="mt-10">
+        <h2 className="text-lg font-semibold text-white mb-4">Documentation</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { file: "README.md", desc: "Project overview, architecture, quick start", icon: "📖" },
+            { file: "AGENTS.md", desc: "Rules for AI agents — conventions, taxonomy, invariants", icon: "🤖" },
+            { file: "GUIDE.md", desc: "Detailed user guide — workflows, examples, troubleshooting", icon: "📋" },
+          ].map((doc) => (
+            <button
+              key={doc.file}
+              onClick={() => onSelectFile(doc.file)}
+              className="text-left p-4 bg-slate-800/30 border border-slate-700/40 rounded-lg hover:border-sky-500/30 hover:bg-slate-800/50 transition-colors"
+            >
+              <div className="text-xl mb-2">{doc.icon}</div>
+              <div className="text-sm font-semibold text-white mb-1">{doc.file}</div>
+              <div className="text-xs text-slate-500">{doc.desc}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Design principles */}
@@ -1046,10 +1321,14 @@ export default function App() {
         {/* Content */}
         <main className="flex-1 overflow-hidden">
           {selectedPath && selectedFile ? (
-            <CodeViewer path={selectedPath} content={selectedFile.content} lang={selectedFile.lang} />
+            selectedFile.lang === "markdown" ? (
+              <MarkdownViewer path={selectedPath} content={selectedFile.content} />
+            ) : (
+              <CodeViewer path={selectedPath} content={selectedFile.content} lang={selectedFile.lang} />
+            )
           ) : (
             <div className="h-full overflow-y-auto">
-              <OverviewPanel />
+              <OverviewPanel onSelectFile={setSelectedPath} />
             </div>
           )}
         </main>
